@@ -1,0 +1,14 @@
+#!/usr/bin/expect -f
+
+puts "\n============== $argv0 ==============="
+set tester [ spawn ./list_test i 99 0 i 98 0 i 97 0 g 0 g 1 g 2 g 3 ]
+wait
+expect {
+    "0:97\r\n1:98\r\n2:99\r\n3:head\r\n" { 
+        send_user "=success\n" 
+    }
+
+    -re ".+" { 
+        send_user "=failed\n"
+    }
+}
