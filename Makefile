@@ -1,8 +1,18 @@
+#
+# This program supports only x86 and x86_64 systems,
+# so I'm assuming that if it's not an x86_64, it's an x86.
+#
+CFLAGS := -O2 -Wall
+ifeq ("$(shell uname -i)", "x86_64")
+	CFLAGS += -DX86_64
+endif
+
+PLT_ADDR := 0x$(shell objdump -d /bin/bash | grep -P '^0[0-9a-fA-F]*\s*<chdir@plt>' | cut -f1 -d ' ')
+
 all: watcher_trace test 
 
 watcher_trace: watcher_trace.c watcher_trace.h linklist.h
-	gcc -o watcher_trace watcher_trace.c \
-		-DPLT_ADDR=0x`objdump -d /bin/bash | grep -P '^0[0-9a-fA-F]*\s*<chdir@plt>' | cut -f1 -d ' '`
+	gcc -o watcher_trace watcher_trace.c -DPLT_ADDR=$(PLT_ADDR) $(CFLAGS)
 
 test:
 	make -C ./tests

@@ -5,7 +5,7 @@
  *
  *    Description:  Main header file for watcher_trace
  *
- *        Version:  0.1
+ *        Version:  0.2
  *        Created:  10/01/2008 12:49:02 PM
  *       Compiler:  gcc
  *
@@ -20,8 +20,6 @@
 
 // Time between /proc checks, in u seconds.
 #define CHECK_INTERVAL 1000000
-// Address of the plt entry to hook.
-//#define PLT_ADDR       0x418548       
 // Signal used to communicate between child/parent.
 #define COM_SIG        SIGUSR1        
 
@@ -53,7 +51,7 @@ struct __new_list {
 
 
 int   file_match(struct dirent *file_ent);
-void  hk_chdir_param(pid_t traced, struct user_regs_struct *regs);
+void  hk_chdir_param(pid_t traced, const struct user_regs_struct *regs);
 void  sig_hdlr(int sig);
 void  terminator(int sig);
 void  shrink_plist(struct __proc_list *proc_list);

